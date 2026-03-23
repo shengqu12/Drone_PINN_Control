@@ -14,7 +14,7 @@ import torch
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from config import PINN_CKPT, MASS, G
+from config import PINN_FREE_CKPT, MASS, G
 from CONTROLLERS.base import BaseController
 from PINN.network import PINNNetwork, InputNormalizer, build_network_input
 
@@ -38,7 +38,7 @@ class PINNController(BaseController):
         self.normalizer = InputNormalizer()
         self.loaded     = False
 
-        ckpt_path = ckpt_path or PINN_CKPT
+        ckpt_path = ckpt_path or PINN_FREE_CKPT
         if os.path.exists(ckpt_path):
             self._load(ckpt_path)
         else:

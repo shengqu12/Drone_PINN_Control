@@ -228,6 +228,86 @@ class QuadrotorModel:
         return self.state[9:12]
 
 
+# ─── IMU-based wind estimator ─────────────────────────────────────────────────
+
+class WindEstimator:
+    """
+    IMU-based wind force estimator using Newton-Euler residual.
+
+    Physics:
+        m * a = R_{k-1} @ [0, 0, T_{k-1}] + [0, 0, -mg] + F_wind
+        → F_wind = m * a_meas - R_{k-1} @ [0, 0, T_{k-1}] + [0, 0, mg]
+
+    where a_meas = (vel_k - vel_{k-1}) / dt  (finite-diff of velocity,
+    equivalent to integrating accelerometer readings).
+
+    In simulation with no added noise this is algebraically exact.
+    Set noise_std > 0 to simulate real IMU measurement errors.
+
+    Parameters
+    ----------
+    alpha          : EMA smoothing (1.0 = no filter, raw estimate)
+    noise_std      : std of artificial noise added to raw estimate (N)
+    zero_vertical  : if True (default), zero out the vertical (z) component
+                     of the estimate.  The PINN(Free) network was trained with
+                     horizontal wind only (wz=0 in all training data), so its
+                     normalizer has std[wz]=1e-8.  Any tiny non-zero wz — even
+                     1e-7 N — normalises to thousands of sigma and causes
+                     catastrophic OOD output.  Set False only if the target
+                     controller was trained with vertical wind.
+    """
+
+    def __init__(self, alpha=1.0, noise_std=0.0, zero_vertical=True):
+        self.alpha         = alpha
+        self.noise_std     = noise_std
+        self.zero_vertical = zero_vertical
+        self._F_est        = np.zeros(3)
+
+    def reset(self):
+        self._F_est = np.zeros(3)
+
+    def update(self, state, state_prev, T_prev, dt=DT):
+        """
+        Estimate wind force from one step of IMU data.
+
+        Parameters
+        ----------
+        state      : (12,) current drone state  [pos, euler, vel, omega]
+        state_prev : (12,) drone state at previous step
+        T_prev     : float  thrust command applied at previous step (N)
+        dt         : float  time step (s)
+
+        Returns
+        -------
+        F_wind_est : (3,) estimated wind force in inertial frame (N)
+        """
+        # Finite-difference acceleration over [k-1, k]
+        # (caused by forces at step k-1: thrust T_prev and wind)
+        a_meas = (state[6:9] - state_prev[6:9]) / dt     # (3,) m/s²
+
+        # Thrust direction at previous step  (use R_{k-1}, not R_k)
+        phi_p, theta_p, psi_p = state_prev[3:6]
+        R_prev          = rotation_matrix(phi_p, theta_p, psi_p)
+        thrust_inertial = R_prev @ np.array([0., 0., T_prev])
+
+        # Newton-Euler residual
+        gravity = np.array([0., 0., MASS * G])
+        F_raw   = MASS * a_meas - thrust_inertial + gravity
+
+        # Optional sensor noise (simulates real IMU)
+        if self.noise_std > 0.0:
+            F_raw = F_raw + np.random.randn(3) * self.noise_std
+
+        # Zero vertical component if requested (see class docstring)
+        if self.zero_vertical:
+            F_raw[2] = 0.0
+
+        # Exponential moving average (alpha=1.0 → no smoothing)
+        self._F_est = self.alpha * F_raw + (1.0 - self.alpha) * self._F_est
+
+        return self._F_est.copy()
+
+
 # ─── Quick sanity check ────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

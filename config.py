@@ -64,5 +64,5 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))  # project root
 CHECKPOINT_DIR  = os.path.join(_ROOT, "CHECKPOINTS")
 RESULTS_DIR     = os.path.join(_ROOT, "RESULTS")
 SANITY_DIR      = os.path.join(_ROOT, "SANITY_CHECK")
-PINN_CKPT       = os.path.join(CHECKPOINT_DIR, "pinn.pt")
+PINN_FREE_CKPT  = os.path.join(CHECKPOINT_DIR, "pinn_free.pt")
 RL_CKPT         = os.path.join(CHECKPOINT_DIR, "rl_ppo")

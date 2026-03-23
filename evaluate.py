@@ -26,24 +26,22 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import RESULTS_DIR, DT, N_STEPS
+from config import RESULTS_DIR, DT, N_STEPS, PINN_FREE_CKPT
 from CONTROLLERS.pid import PIDController
 from CONTROLLERS.lqr import LQRController
 from CONTROLLERS.pinn_controller import PINNController
 from CONTROLLERS.rl_agent import RLController, train_rl
-from PINN.trainer import PINN_FREE_CKPT
 
 
 # ─── Style ────────────────────────────────────────────────────────────────────
 
 COLORS = {
-    "PID"       : "#888780",
-    "LQR"       : "#1D9E75",
-    "PINN"      : "#534AB7",
-    "RL(PPO)"   : "#E24B4A",
-    "PINN(Free)": "#F5A623",
+    "PID"        : "#888780",
+    "LQR"        : "#1D9E75",
+    "RL(PPO)"    : "#E24B4A",
+    "PINN(Free)" : "#F5A623",
 }
-MARKERS = {"PID": "s", "LQR": "o", "PINN": "D", "RL(PPO)": "X", "PINN(Free)": "^"}
+MARKERS = {"PID": "s", "LQR": "o", "RL(PPO)": "X", "PINN(Free)": "^"}
 
 plt.rcParams.update({
     'font.size'        : 11,
@@ -75,13 +73,10 @@ def run_simulation(wind_speeds, wind_type, traj_type):
 
     traj = make_trajectory(traj_type)
     controllers = {
-        "PID"     : PIDController(),
-        "LQR"     : LQRController(),
-        "PINN"    : PINNController(),
-        "RL(PPO)" : RLController(),
+        "LQR"        : LQRController(),
+        "PINN(Free)" : PINNController(ckpt_path=PINN_FREE_CKPT),
+        "RL(PPO)"    : RLController(),
     }
-    if os.path.exists(PINN_FREE_CKPT):
-        controllers["PINN(Free)"] = PINNController(ckpt_path=PINN_FREE_CKPT)
 
     results = {name: {} for name in controllers}
     t_arr   = np.arange(N_STEPS) * DT
@@ -140,7 +135,7 @@ def run_simulation(wind_speeds, wind_type, traj_type):
 def plot_wind_sweep(results, wind_speeds, save_path):
     fig, ax = plt.subplots(figsize=(7, 4.5))
 
-    plot_order = ["PID", "LQR", "PINN", "PINN(Free)", "RL(PPO)"]
+    plot_order = ["PID", "LQR", "PINN(Free)", "RL(PPO)"]
     for name in plot_order:
         if name not in results:
             continue
@@ -168,18 +163,18 @@ def plot_wind_sweep(results, wind_speeds, save_path):
     ax.set_xlim(left=-0.5)
     ax.set_ylim(bottom=0)
 
-    # annotate PINN < LQR crossover
-    if "LQR" in results and "PINN" in results:
-        lqr_rmses  = [results["LQR"][ws]['rmse']  for ws in wind_speeds]
-        pinn_rmses = [results["PINN"][ws]['rmse'] for ws in wind_speeds]
+    # annotate PINN(Free) < LQR crossover
+    if "LQR" in results and "PINN(Free)" in results:
+        lqr_rmses  = [results["LQR"][ws]['rmse']       for ws in wind_speeds]
+        pinn_rmses = [results["PINN(Free)"][ws]['rmse'] for ws in wind_speeds]
         for i, ws in enumerate(wind_speeds):
-            if pinn_rmses[i] < lqr_rmses[i] and not results["PINN"][ws]['crashed']:
-                ax.annotate("PINN < LQR",
+            if pinn_rmses[i] < lqr_rmses[i] and not results["PINN(Free)"][ws]['crashed']:
+                ax.annotate("PINN(Free) < LQR",
                             xy=(ws, pinn_rmses[i]),
                             xytext=(ws + 0.5, pinn_rmses[i] + 0.2),
-                            fontsize=9, color=COLORS["PINN"],
+                            fontsize=9, color=COLORS["PINN(Free)"],
                             arrowprops=dict(arrowstyle="->",
-                                           color=COLORS["PINN"], lw=1))
+                                           color=COLORS["PINN(Free)"], lw=1))
                 break
 
     plt.tight_layout()
@@ -200,7 +195,7 @@ def plot_trajectories(results, wind_speeds_to_plot, save_dir):
                 '--', color='#AAAAAA', linewidth=1.5,
                 label='Reference', zorder=1)
 
-        for name in ["LQR", "PINN", "PINN(Free)", "PID", "RL(PPO)"]:
+        for name in ["LQR", "PINN(Free)", "PID", "RL(PPO)"]:
             if name not in results:
                 continue
             ep    = results[name][ws]
@@ -238,7 +233,7 @@ def plot_error_timeseries(results, wind_speeds_to_plot, save_path):
     t_arr = np.arange(N_STEPS) * DT
 
     for ax, ws in zip(axes, wind_speeds_to_plot):
-        for name in ["LQR", "PINN", "PINN(Free)", "PID", "RL(PPO)"]:
+        for name in ["LQR", "PINN(Free)", "PID", "RL(PPO)"]:
             if name not in results:
                 continue
             ep    = results[name][ws]
@@ -272,7 +267,7 @@ def plot_improvement(results, wind_speeds, save_path):
         print("LQR results not found, skipping improvement plot")
         return
 
-    variants = [n for n in ["PINN", "PINN(Free)"] if n in results]
+    variants = [n for n in ["PINN(Free)"] if n in results]
     if not variants:
         print("No PINN variants found for improvement plot")
         return
@@ -345,7 +340,7 @@ def plot_improvement(results, wind_speeds, save_path):
 def save_performance_table(results, wind_speeds, save_path):
     import csv
 
-    ctrl_names = [n for n in ["PID", "LQR", "PINN", "PINN(Free)", "RL(PPO)"]
+    ctrl_names = [n for n in ["PID", "LQR", "PINN(Free)", "RL(PPO)"]
                   if n in results]
 
     rows = []
@@ -360,7 +355,7 @@ def save_performance_table(results, wind_speeds, save_path):
         # PINN variants vs LQR improvement
         if "LQR" in results:
             lqr_rmse = results["LQR"][ws]['rmse']
-            for pinn_name in ["PINN", "PINN(Free)"]:
+            for pinn_name in ["PINN(Free)"]:
                 if pinn_name not in results:
                     continue
                 key = pinn_name.replace("(", "").replace(")", "")
@@ -400,7 +395,7 @@ def save_performance_table(results, wind_speeds, save_path):
     print("-" * sep_w)
 
     # improvement rows
-    for pinn_name in ["PINN", "PINN(Free)"]:
+    for pinn_name in ["PINN(Free)"]:
         if pinn_name not in results:
             continue
         key = pinn_name.replace("(", "").replace(")", "")

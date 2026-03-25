@@ -182,9 +182,17 @@ class PINNNetwork(nn.Module):
 def build_network_input(state, wind_force, ref):
     """
     Concatenate state (12,), wind_force (3,), ref (6,) → (21,) input vector.
-    Used both during training and inference.
+    Used for the standard LQR+FF-teacher PINN.
     """
     return np.concatenate([state, wind_force, ref])
+
+
+def build_network_input_geo(state, wind_force, ref, acc_ref):
+    """
+    Concatenate state (12,), wind_force (3,), ref (6,), acc_ref (3,) → (24,).
+    Used for the geometric-teacher PINN which needs trajectory acceleration.
+    """
+    return np.concatenate([state, wind_force, ref, acc_ref])
 
 
 # ─── Sanity check ─────────────────────────────────────────────────────────────

@@ -5,8 +5,8 @@ This is the "label-free" alternative to train_pinn.py.
 
 Key difference
 --------------
-  train_pinn.py      : supervises with LQR control actions (u_LQR)
-  train_pinn_free.py : supervises ONLY with trajectory reference position/velocity
+  train_pinn.py      : supervises ONLY with trajectory reference position/velocity
+
 
 The network self-discovers what control to apply by minimising the cascade-PD
 physics loss (Step 1–4 in trainer_free.py). Gradients flow directly through the

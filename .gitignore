@@ -5,3 +5,10 @@ NOTEBOOKS/
 use_best_results.py
 
 .claude/
+
+VISUALIZATION/
+
+paper_chinese.md
+pi-wan.pdf
+
+.gitignore

@@ -65,4 +65,12 @@ CHECKPOINT_DIR  = os.path.join(_ROOT, "CHECKPOINTS")
 RESULTS_DIR     = os.path.join(_ROOT, "RESULTS")
 SANITY_DIR      = os.path.join(_ROOT, "SANITY_CHECK")
 PINN_FREE_CKPT  = os.path.join(CHECKPOINT_DIR, "pinn_free.pt")
-RL_CKPT         = os.path.join(CHECKPOINT_DIR, "rl_ppo")
+PINN_GEO_CKPT      = os.path.join(CHECKPOINT_DIR, "pinn_geo.pt")
+PINN_GEO_DRAG_CKPT = os.path.join(CHECKPOINT_DIR, "pinn_geo_drag.pt")
+RL_CKPT            = os.path.join(CHECKPOINT_DIR, "rl_ppo")
+
+# ─── Aerodynamic drag ─────────────────────────────────────────────────────────
+# Quadratic drag model: F_drag = -C_DRAG * ||v|| * v  (opposes motion)
+# At v=2 m/s: F_drag = 0.5 * 2 * 2 = 2 N  (~20% of gravity, significant at high speed)
+# LQR+FF is unaware of this term; PINN(Geo+Drag) teacher explicitly compensates it.
+C_DRAG = 0.5     # kg/m

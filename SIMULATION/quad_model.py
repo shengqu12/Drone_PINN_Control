@@ -59,14 +59,17 @@ def euler_rate_matrix(phi, theta):
 
 # ─── Dynamics (continuous time) ─────────────────────────────────────────────── (important)
 
-def quad_dynamics(state, control, wind_force):
+def quad_dynamics(state, control, wind_force, drag_coeff=0.0):
     """
     kinematics for 4 quadrotors drone  ẋ = f(x, u, F_wind)
 
     Args:
         state      : (12,) [x,y,z, phi,theta,psi, vx,vy,vz, p,q,r]
         control    : (4,)  [T, tau_x, tau_y, tau_z]
-        wind_force : (3,)  [Fx, Fy, Fz]  
+        wind_force : (3,)  [Fx, Fy, Fz]
+        drag_coeff : float  quadratic drag coefficient (kg/m).
+                    F_drag = -drag_coeff * ||v|| * v   (opposes motion)
+                    0.0 = no drag (default, backward-compatible)
 
     Returns:
         dstate : (12,) derivative of state (ẋ)
@@ -93,8 +96,11 @@ def quad_dynamics(state, control, wind_force):
 
     gravity = np.array([0.0, 0.0, -G * MASS])  # gravity force in inertial frame
 
-    # v̇ = (thrust + gravity + wind) / m
-    dv = (thrust_inertial + gravity + wind_force) / MASS
+    # v̇ = (thrust + gravity + wind + drag) / m
+    v      = np.array([vx, vy, vz])
+    v_norm = np.linalg.norm(v)
+    F_drag = -drag_coeff * v_norm * v   # opposes motion, zero when drag_coeff=0
+    dv = (thrust_inertial + gravity + wind_force + F_drag) / MASS
 
     # ── rotational dynamics ──────────────────────────────────────────
     # η̇ = W(φ,θ) · ω
@@ -116,7 +122,7 @@ def quad_dynamics(state, control, wind_force):
 # ─── RK4 integrator ───────────────────────────────────────────────────────────
 #  discretize the continuous dynamics using 4th-order Runge-Kutta method for better accuracy
 
-def rk4_step(state, control, wind_force, dt=DT):
+def rk4_step(state, control, wind_force, dt=DT, drag_coeff=0.0):
     """
     rk4 is better than Euler for accuracy and stability, especially with larger time steps.
 
@@ -125,14 +131,15 @@ def rk4_step(state, control, wind_force, dt=DT):
         control    : (4,)  current control input (remains constant within this step)
         wind_force : (3,)  current wind force
         dt         : time step duration
+        drag_coeff : float  quadratic drag coefficient (passed through to quad_dynamics)
 
     Returns:
-        next_state : (12,) 
+        next_state : (12,)
     """
-    k1 = quad_dynamics(state,              control, wind_force)
-    k2 = quad_dynamics(state + dt/2 * k1, control, wind_force)
-    k3 = quad_dynamics(state + dt/2 * k2, control, wind_force)
-    k4 = quad_dynamics(state + dt   * k3, control, wind_force)
+    k1 = quad_dynamics(state,              control, wind_force, drag_coeff)
+    k2 = quad_dynamics(state + dt/2 * k1, control, wind_force, drag_coeff)
+    k3 = quad_dynamics(state + dt/2 * k2, control, wind_force, drag_coeff)
+    k4 = quad_dynamics(state + dt   * k3, control, wind_force, drag_coeff)
 
     return state + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4)
 
@@ -158,7 +165,8 @@ class QuadrotorModel:
     T_MAX   = 4 * MASS * G     # maximum hover thrust
     TAU_MAX = 0.5               # N·m
 
-    def __init__(self):
+    def __init__(self, drag_coeff=0.0):
+        self.drag_coeff = drag_coeff   # 0.0 = no drag (default, backward-compatible)
         self.state = self._hover_state()
 
     def _hover_state(self):
@@ -193,7 +201,7 @@ class QuadrotorModel:
             wind_force = np.zeros(3)
 
         u = self.clip_control(control)
-        self.state = rk4_step(self.state, u, wind_force)
+        self.state = rk4_step(self.state, u, wind_force, drag_coeff=self.drag_coeff)
 
         done = self._check_crash()
         return self.state.copy(), done
